@@ -1,0 +1,175 @@
+# Authoritative synthesis source list for the Bad Lands core.
+# Game RTL lives here and ONLY here — never add files from the Quartus GUI, and
+# never put game logic in sys/ (that directory is the untouched MiSTer framework).
+#
+# Quartus REWRITES Badlands.qsf on every compile (it appends the fitter's
+# set_location_assignment lines), so every hand-maintained assignment lives
+# here; files.qip is never rewritten by the tool and is edited by hand.
+#
+# The blocks below follow the board: the framework and the PLL, then the video
+# sync, the 68000 main board, the video pipeline and the sound section, each
+# with a comment naming the schematic sheets it transcribes.  Vendored cores
+# live under rtl/lib/ and are enabled with the block that instantiates them.
+
+set_global_assignment -name QIP_FILE sys/sys.qip
+
+# ---- clocking ----
+# clk_sys = 57.272724 MHz = 4 x 14.318181 MHz (PLL 50 MHz M=63 N=5 C=11), the
+# Xybots/Vindicators PLL reused unchanged; outclk_1 is the same rate,
+# phase-shifted, for the SDRAM_CLK pin.
+set_global_assignment -name QIP_FILE rtl/pll.qip
+
+# ---- video ----
+# The SOS-2 sync generator at 25M (schematic sheet 4) — 456 x 262 with
+# 336 x 240 visible at 7.15909 MHz, one pixel per H count.  Ported from the
+# Blasteroids core's blstroid_sos2_sync.sv (the same Atari custom) with the
+# Xybots/Vindicators SYNGEN family raster positions.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_sos2_sync.sv
+# Analog-output alignment (CRT H-Size / H-Position, VGA H/V-Shift), outside the
+# core.  analog_hsize.sv is Umberto Parisi's (rmonic79) line-buffer resampler,
+# used unchanged — see NOTICE.md.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/analog_hsize.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_analog_adjust.sv
+
+# ============================================================================
+#  the 68000 MAIN BOARD (schematic sheets 1 and 2) and the MEMORY PATH
+# ============================================================================
+# `badlands_main` is the one module rtl/badlands_core.sv instantiates for this
+# half of the board; everything else below it is a child:
+#
+#   badlands_cpu          fx68k 22E with the /7M pacing, the IPL sync and /VPA
+#   badlands_addr_decode  GAL 26C 136074-1001 + the LS138 24C, verbatim
+#   badlands_dtack        the 28R LS163A wait sequencer (0 / 2 / 5 waits)
+#   badlands_irq          the 22J VBLANK latch and the 13J IPL encoder
+#   badlands_watchdog     the power-on one-shot and the 28A LS197 /RES fan-out
+#   badlands_inputs       /SWITCHES 18C, the LETA 20C, the two steering
+#                         quadrature generators and the LM556 pedal timers
+#   badlands_eeprom_2816  the 2816A 27J and its 22J unlock flop
+#   badlands_nvram_io     the MiSTer ioctl index-2 save/restore channel
+#   badlands_vram         the 22V, its address muxes, GAL 21R and the byte lanes
+#   badlands_prog_rom     the 256 KB program ROM as 131072 x 16 of BRAM
+#   badlands_rom_loader   the ioctl index-0 stream router
+#   badlands_sdram_loader byte stream -> 16-bit SDRAM words
+#   badlands_sdram        the SDR controller, plus its `rfsh_ok` refresh gate
+#   badlands_gfx_mem      the two BYTE read clients and the loader write port
+#
+# rtl/main is on the search path because badlands_inputs.sv also holds
+# badlands_quad_gen, badlands_pedal_556 and badlands_leta.
+set_global_assignment -name SEARCH_PATH rtl/main
+
+# The 68000 main CPU is fx68k (Jorge Cwik), vendored VERBATIM under
+# rtl/lib/fx68k/ with its own LICENSE and README (GPL-3.0-or-later; NOTICE.md).
+#
+# THE SEARCH_PATH LINE BELOW IS LOAD BEARING.  fx68k.sv does
+# `$readmemb("microrom.mem", ...)` / `$readmemb("nanorom.mem", ...)` with
+# RELATIVE paths, and the vendored files are not edited.  Quartus resolves them
+# against the project directory plus SEARCH_PATH, so the two .mem files must be
+# reachable from core/ — hence this line.  IF THE MICROCODE IS NOT FOUND THE
+# ROMs SYNTHESISE EMPTY AND THE CORE BOOTS TO A BLACK SCREEN WITH NO ERROR THAT
+# LOOKS LIKE THE CAUSE.  Check the build did find them: Analysis & Synthesis
+# emits `Info (10905)` naming each .mem file it read.
+set_global_assignment -name SEARCH_PATH rtl/lib/fx68k
+# uaddrPla.sv is the combinational opcode PLA between Ir and the microcode
+# address — the path Badlands.sdc gives fx68k's own documented multicycle
+# exception (rtl/lib/fx68k/fx68k.txt "Timing analysis").
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/fx68k.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/fx68kAlu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/uaddrPla.sv
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_cpu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_addr_decode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_dtack.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_irq.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_watchdog.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_inputs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_eeprom_2816.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_nvram_io.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_vram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_prog_rom.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_rom_loader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_sdram_loader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/badlands_gfx_mem.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/badlands_main.sv
+
+# ============================================================================
+#  the raster-time VIDEO PIPELINE (sheets 1, 3, 4 and 6)
+# ============================================================================
+# `badlands_video` is the one module rtl/badlands_core.sv instantiates for
+# video; every file below it is one sheet block:
+#
+#   badlands_hstrobes   GAL 26R 136074-2000, the 13J F00 8HD6H inverter and the
+#                       13V LS175 //HSYNC delay
+#   badlands_gfx_client the byte-fetch adapter onto badlands_main's gfx port
+#   badlands_pf         9V/7V, 18S, 16P, the six PF 27512s, 11V, 7T/7R, 7N
+#   badlands_vmatch     the VMATCH custom 137552-001 at 17U
+#   badlands_mo_fetch   13V, 15V, the three MO 27512s, 7T/7R high
+#   badlands_lb_ctrl    GAL 16S 136074-1003 + the 16P /MOW gates
+#   badlands_lb         the MB87316 line buffer at 15N
+#   badlands_mo         the sheet-4 motion-object top
+#   badlands_prio       GAL 9N 136074-1004 + 18R — including PIN 12, the
+#                       D8 = AUDFULL read at 0xFC0000
+#   badlands_cram       the 8K colour RAM, 10K, 19K, 8F, 3K, 1K/5K
+#   badlands_dac        RN1/RN2/RN3, Q5-Q7, 2J/4J, 6F
+#   badlands_video      the block top, the shared /CRAMA7:1 mux and 8J/6F
+#                       composite sync
+#
+# rtl/video/badlands_testpat.sv is a bring-up pattern instantiated only under
+# `ifdef BADLANDS_TESTPAT, so it is NOT compiled into a release build and is
+# deliberately absent from this list.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_hstrobes.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_gfx_client.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_pf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_vmatch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_mo_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_lb_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_lb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_mo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_prio.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_cram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_dac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_video.sv
+
+# ============================================================================
+#  the ON-BOARD SOUND SECTION (schematic sheet 5)
+# ============================================================================
+# Bad Lands has NO separate audio PCB: the 6502A 14C, the GAL 12E decode, the
+# LS138 10F, the 6264 9B, the banked 27512 9C, the 10E/14E/16C glue, the
+# YM2151 9D, the YM3012 8E and the LM324/TDA2030 tail are all on the game PCB.
+# `badlands_sound` is the one module rtl/badlands_core.sv instantiates:
+#
+#   badlands_snd_decode  GAL 136074-1005 and the LS138 10F, verbatim
+#   badlands_snd_bus     the 6502A on T65, the 6264 and the $3000 bank window
+#   badlands_snd_io      10E LS174, 14E 74F74, 16C LS240
+#   badlands_mailbox     15F / 13F LS374 + the two 15J flags
+#   badlands_ym          the YM2151 through jt51 + the YM3012 pairing
+#   badlands_snd_filter  the 5E/2E/TDA2030 analogue chain, digitised
+#
+# The two vendored cores this block instantiates are enabled with it.  T65
+# (Daniel Wallner and contributors) is VHDL and must be compiled in dependency
+# order: the package, then the microcode and ALU, then the core, then the
+# flat-port wrapper badlands_snd_bus instantiates.
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_Pack.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_MCode.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_ALU.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_wrap.vhd
+# jt51 (Jose Tejada, jotego) ships its own QIP naming all 30 sources plus the
+# filter/ directory; it is used unchanged.
+set_global_assignment -name QIP_FILE rtl/lib/jt51/hdl/jt51.qip
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_snd_decode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_snd_bus.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_snd_io.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_mailbox.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_ym.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_snd_filter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/badlands_sound.sv
+
+# ---- core + emu glue ----
+# badlands_steer sums every MiSTer control (analog stick, D-pad, paddle, spinner
+# and mouse X) into the signed COUNT delta badlands_main's quadrature generator
+# takes.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/badlands_steer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/badlands_core.sv
+set_global_assignment -name SDC_FILE Badlands.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE Arcade-Badlands.sv

@@ -97,7 +97,7 @@ own defaults — as a factory-new board does.
 | Orientation | Original / Flip |
 | Scale | Normal / V-Integer / HV-Integer / Narrower HV-Integer |
 | Scandoubler Fx | None / HQ2x / CRT 25% / CRT 50% / CRT 75% — anything but None turns the scandoubler on |
-| **Analog alignment** (page) | CRT H-Size, CRT H-Position, Analog VGA H-Shift, Analog VGA V-Shift |
+| **CRT Adjust** (page) | CRT Adjust Off / On, then CRT H-Size, CRT H-Position and CRT V-Shift (shown while On). A 15 kHz adjustment: it is held Off while any Scandoubler Fx is selected or the scandoubler is forced |
 | **Steering and pedals** (page) | Spinner sensitivity, Analog stick rate, Gas pedal sense |
 | **Option switch SW1** (page) | SW1-1 Freeze, SW1-2 Freeze-Step, SW1-3 Old gas pedals, SW1-4 Old steering wheels |
 | Service | The cabinet self-test switch |
@@ -118,14 +118,17 @@ Wheel movement is queued and fed to the board at a bounded rate. The game reads
 the wheel as an 8-bit difference once a frame, so this stops a very fast spin
 from wrapping around into a turn the other way.
 
-**Analog alignment** is the same page as in the
-[Toobin'](https://github.com/MiSTer-devel/Arcade-Toobin_MiSTer),
-[Klax](https://github.com/MiSTer-devel/Arcade-Klax_MiSTer) and
-[Xybots](https://github.com/MiSTer-devel/Arcade-Xybots_MiSTer) cores, for
-centring and sizing the picture on an analog CRT. It acts on the output side
-only: core timing is untouched, and at the zero settings it is a bit-exact
-bypass. CRT H-Size and H-Position are 15 kHz adjustments and are bypassed while
-the scandoubler runs.
+**CRT Adjust** is rmonic79's
+[MiSTer-CRT-Adjust](https://github.com/rmonic79/MiSTer-CRT-Adjust), as in the
+Blasteroids core, for centring and sizing the picture on an analog CRT. It acts
+on the output side only: core timing is untouched, the sync stays native (so a
+CRT cannot lose lock), and Off is a bit-exact bypass. H-Position moves the
+picture inside the line; enlarging with H-Size beyond about +4 runs the right
+edge off the line unless H-Position pulls the picture left. It is a 15 kHz
+adjustment and is held Off while the scandoubler runs. It replaces the older
+*Analog alignment* page: *Analog VGA H-Shift* is gone (H-Position covers it),
+*Analog VGA V-Shift* is now CRT V-Shift and only acts while CRT Adjust is On,
+and settings saved by an older build do not carry over.
 
 **All four SW1 positions must be OFF in normal operation.** The manual lists
 them as development and legacy-hardware options, not game settings — the Freeze
@@ -159,9 +162,9 @@ The whole core runs in a single **57.272724 MHz** `clk_sys` domain (4 × the
 every clock on the board is an exact subdivision and there is no clock-domain
 crossing anywhere inside the game logic.
 
-Resource use on the DE10-Nano's Cyclone V (`5CSEBA6U23I7`): 13,617 / 41,910 ALMs
+Resource use on the DE10-Nano's Cyclone V (`5CSEBA6U23I7`): 13,580 / 41,910 ALMs
 (32 %), 433 / 553 RAM blocks (78 %), 45 / 112 DSP blocks (40 %). Timing closes
-on all four corners with +2.315 ns worst-case setup slack on `clk_sys`.
+on all four corners with +3.596 ns worst-case setup slack on `clk_sys`.
 
 ## Accuracy and verification
 
@@ -170,7 +173,7 @@ about whether the result was actually checked, here is the verification record.
 The test suite lives in the development repository and is not shipped here;
 these are its results for the released build.
 
-**Simulation suite** — 40 gated testbenches (Icarus Verilog, plus Verilator
+**Simulation suite** — 41 gated testbenches (Icarus Verilog, plus Verilator
 co-simulations that link the vendored VHDL CPU), covering the address decode,
 bus timing, interrupts and watchdog, EEPROM, inputs and steering, the SDRAM
 path, every video stage and the full sound section, each paired with a
@@ -318,7 +321,7 @@ full list.
 | fx68k (68000) | Jorge Cwik (ijor), <https://github.com/ijor/fx68k> | GPL-3.0-or-later |
 | T65 (6502) | Daniel Wallner, with fixes by Mike Johnson, Wolfgang Scherr and Morten Leikvoll (OpenCores / FPGAArcade) | BSD-style |
 | jt51 (YM2151) | Jose Tejada (jotego), <https://github.com/jotego/jt51> | GPL-3.0-or-later |
-| `analog_hsize` | Umberto Parisi (rmonic79), Arcade-Raiden_MiSTer | GPL-3.0-or-later |
+| `crt_adjust` | Umberto Parisi (rmonic79), MiSTer-CRT-Adjust (c682de9) | GPL-3.0-or-later |
 | Altera/Intel PLL megafunction | Intel Corporation (generated IP) | Intel FPGA IP licence, as generated |
 
 The SOS-2 raster, the LETA model, the memory path and the VMATCH / line-buffer

@@ -81,15 +81,20 @@ localparam CONF_STR = {
 	"O[22:20],Scale,Normal,V-Integer,HV-Integer,Narrower HV-Integer;",
 	"O[3:1],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
-	// Analog alignment (CRT H-Size / H-Position, VGA H-Shift / V-Shift), the same
-	// page as the Xybots, Toobin', Klax and Vindicators cores; the logic is in
-	// rtl/video/badlands_analog_adjust.sv.
-	"P1,Analog alignment;",
+	// CRT Adjust -- rmonic79's MiSTer-CRT-Adjust engine, core-side variant
+	// (rtl/video/badlands_analog_adjust.sv around rtl/video/crt_adjust.sv).  An
+	// On/Off master and three amounts; Off is a bit-exact bypass.  H-Position
+	// moves the CONTENT inside a native HSync (HPOS_MODE = CONTENTSHIFT), so the
+	// old separate "Analog VGA H-Shift" is gone, and V-Shift is the engine's own.
+	// Fresh status bits (51..69): the retired page's 23..46 are left unused so a
+	// saved config from an older build cannot switch the stage on.  The amounts
+	// are hidden whenever the stage is not actually live (see `crt_enable`).
+	"P1,CRT Adjust;",
 	"P1-;",
-	"P1O[27:23],CRT H-Size,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
-	"P1O[34:28],CRT H-Position,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,+32,+33,+34,+35,+36,+37,+38,+39,+40,+41,+42,+43,+44,+45,+46,+47,+48,+49,+50,+51,+52,+53,+54,+55,+56,+57,+58,+59,+60,+61,+62,+63,-64,-63,-62,-61,-60,-59,-58,-57,-56,-55,-54,-53,-52,-51,-50,-49,-48,-47,-46,-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
-	"P1O[40:35],Analog VGA H-Shift,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
-	"P1O[46:41],Analog VGA V-Shift,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
+	"P1O[51],CRT Adjust,Off,On;",
+	"H1P1O[56:52],CRT H-Size,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
+	"H1P1O[63:57],CRT H-Position,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,+32,+33,+34,+35,+36,+37,+38,+39,+40,+41,+42,+43,+44,+45,+46,+47,+48,+49,+50,+51,+52,+53,+54,+55,+56,+57,+58,+59,+60,+61,+62,+63,-64,-63,-62,-61,-60,-59,-58,-57,-56,-55,-54,-53,-52,-51,-50,-49,-48,-47,-46,-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
+	"H1P1O[69:64],CRT V-Shift,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"-;",
 	// The steering wheels are optical quadrature encoders.  Every MiSTer control
 	// turns the disc at once -- analog stick, D-pad, paddle, spinner and (P1)
@@ -138,6 +143,15 @@ wire [10:0] ps2_key;
 wire        direct_video;
 wire [21:0] gamma_bus;
 
+// CRT Adjust master enable.  Declared here because status_menumask below reads
+// it.  The stage is a 15 kHz adjustment and is forced Off whenever the
+// scandoubler runs, for any Scandoubler Fx as well as forced_scandoubler: while
+// On, the engine's pixel enable is the uneven 8/9-clock read tick and its
+// hb_out folds VBLANK back into HBLANK, which strips the doubled output of its
+// VSync (see the hb_in note in badlands_analog_adjust).
+wire sd_active  = (status[3:1] != 3'd0) | forced_scandoubler;
+wire crt_enable = status[51] & ~sd_active;
+
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [26:0] ioctl_addr;
@@ -165,7 +179,9 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask(16'd0),
+	// H1 = "hide while set": hide the three CRT Adjust amounts whenever the
+	// stage is not actually live -- the same `crt_enable` that drives it.
+	.status_menumask({14'd0, ~crt_enable, 1'b0}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_wr(ioctl_wr),
@@ -304,22 +320,18 @@ assign AUDIO_R = aud_r;
 wire [7:0] adj_r, adj_g, adj_b;
 wire       adj_hs, adj_vs, adj_hb, adj_vb, adj_ce;
 
-// V_TOTAL follows badlands_video's parameter, which defaults to 262.
-// CRT H-Size (and H-Position, which only acts through the same resampler) is a
-// 15 kHz adjustment and is forced to bypass whenever the scandoubler runs.  The
-// resampling path cannot feed the scandoubler: its pixel enable is uneven (8/9
-// clocks) and its hb_out folds VBLANK back into HBLANK, which strips the
-// doubled output of its VSync (see the hb_in note in badlands_analog_adjust).
-wire sd_active = (status[3:1] != 3'd0) | forced_scandoubler;
-
+// CRT Adjust (H-Size / H-Position / V-Shift), rmonic79's crt_adjust engine
+// with this core's read-rate and blanking glue.  V_TOTAL follows
+// badlands_video's parameter, which defaults to 262.  `crt_enable` is declared
+// up with the hps_io wires because status_menumask reads it.
 badlands_analog_adjust #(.H_TOTAL(456), .V_TOTAL(262), .CLK_PER_PIX(8)) u_analog_adjust
 (
 	.clk        (clk_sys),
 	.ce_pix     (ce_pix),
-	.osd_hsize  (sd_active ? 5'd0 : status[27:23]),
-	.osd_hpos   (status[34:28]),
-	.osd_hshift (status[40:35]),
-	.osd_vshift (status[46:41]),
+	.osd_on     (crt_enable),
+	.osd_hsize  (status[56:52]),
+	.osd_hpos   (status[63:57]),
+	.osd_vshift (status[69:64]),
 	.r_in(core_r), .g_in(core_g), .b_in(core_b),
 	.hs_in(core_hs), .vs_in(core_vs), .hb_in(core_hb), .vb_in(core_vb),
 	.r_out(adj_r), .g_out(adj_g), .b_out(adj_b),
@@ -342,7 +354,7 @@ wire vga_de_raw;
 // H count.  WIDTH is the scandoubler / HQ2x line buffer length, NOT the active
 // width: Hq2x's write address counts every input pixel from one HBlank fall to
 // the next, i.e. the whole 456-count line, so 456 = H_TOTAL keeps every write
-// inside the buffer.  (H-Size never reaches the doubler; it is forced to bypass
+// inside the buffer.  (CRT Adjust never reaches the doubler; it is forced Off
 // above.)
 arcade_video #(.WIDTH(456), .DW(24)) arcade_video
 (

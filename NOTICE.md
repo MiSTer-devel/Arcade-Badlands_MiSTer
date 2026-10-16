@@ -10,7 +10,7 @@ license. File headers are preserved in place.
 |---|---|---|---|
 | MiSTer framework (`sys_top`, `hps_io`, `arcade_video`, `video_freak`, `screen_rotate`, `ascal`, PLL config, …) | Till Harbaum, Alexey Melnikov (sorgelig), MiSTer-devel contributors | GPL-2.0-or-later / GPL-3.0-or-later per file | `sys/` |
 | Altera/Intel PLL megafunction instance | Intel Corporation (generated IP) | Intel FPGA IP licence, as generated | `rtl/pll*/` |
-| `analog_hsize.sv` — analog-video horizontal resize / position line buffer | Umberto Parisi (rmonic79), Arcade-Raiden_MiSTer, via the Toobin' / Xybots / Vindicators cores | GPL-3.0-or-later | `rtl/video/analog_hsize.sv` |
+| `crt_adjust.sv` — CRT Adjust line buffer (H-Size / H-Position / V-Shift) | Umberto Parisi (rmonic79), MiSTer-CRT-Adjust <https://github.com/rmonic79/MiSTer-CRT-Adjust> `rtl/crt_adjust.sv` at c682de9, with four adaptations listed in the file header | GPL-3.0-or-later | `rtl/video/crt_adjust.sv` |
 | fx68k — cycle-exact 68000 (the main CPU), vendored verbatim with its own `LICENSE` and `README.md` | Jorge Cwik (ijor), <https://github.com/ijor/fx68k> | GPL-3.0-or-later | `rtl/lib/fx68k/` |
 | T65 6502 soft CPU and the `T65_wrap` flat-port wrapper (the sound CPU) | Daniel Wallner, Mike Johnson, Wolfgang Scherr, Morten Leikvoll | BSD-style (OpenCores); the "redistributions in synthesized form" clause is satisfied by this notice | `rtl/lib/T65/` |
 | jt51 YM2151 (OPM) FM core | Jose Tejada Gómez (jotego), <https://github.com/jotego/jt51> | GPL-3.0-or-later | `rtl/lib/jt51/` |
@@ -35,7 +35,8 @@ GPL-2.0-or-later — compatible with this project's GPL-3.0.
 | Bad Lands file(s) | Follows |
 |---|---|
 | `Arcade-Badlands.sv`, `rtl/badlands_core.sv`, `Badlands.sdc` | Vindicators / Xybots / Toobin' MiSTer cores |
-| `rtl/video/badlands_sos2_sync.sv`, `badlands_testpat.sv`, `badlands_analog_adjust.sv` | Blasteroids / Xybots / Vindicators MiSTer cores |
+| `rtl/video/badlands_sos2_sync.sv`, `badlands_testpat.sv` | Blasteroids / Xybots / Vindicators MiSTer cores |
+| `rtl/video/badlands_analog_adjust.sv` | Blasteroids MiSTer core, `blstroid_analog_adjust.sv` (the crt_adjust glue), written from MiSTer-CRT-Adjust's `examples/core_side_snippet.v` (Umberto Parisi) |
 | `rtl/main/badlands_main.sv`, `badlands_cpu.sv`, `badlands_addr_decode.sv`, `badlands_dtack.sv`, `badlands_irq.sv`, `badlands_watchdog.sv`, `badlands_eeprom_2816.sv`, `badlands_nvram_io.sv` | Blasteroids `blstroid_main.sv` and the Xybots fx68k CPU wrapper |
 | `rtl/main/badlands_inputs.sv` — the `badlands_leta` model | Blasteroids `blstroid_leta.sv`, which itself follows the Atari System 2 core's `sys2_leta.sv` |
 | `rtl/main/badlands_inputs.sv` — the `badlands_quad_gen` model | Atari System 2 MiSTer core, `sys2_quad_gen.sv` (GPL-2.0-or-later) |

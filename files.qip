@@ -25,10 +25,11 @@ set_global_assignment -name QIP_FILE rtl/pll.qip
 # Blasteroids core's blstroid_sos2_sync.sv (the same Atari custom) with the
 # Xybots/Vindicators SYNGEN family raster positions.
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_sos2_sync.sv
-# Analog-output alignment (CRT H-Size / H-Position, VGA H/V-Shift), outside the
-# core.  analog_hsize.sv is Umberto Parisi's (rmonic79) line-buffer resampler,
-# used unchanged — see NOTICE.md.
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/analog_hsize.sv
+# Analog-output alignment (CRT Adjust: H-Size / H-Position / V-Shift), outside
+# the core.  crt_adjust.sv is Umberto Parisi's (rmonic79) MiSTer-CRT-Adjust
+# engine, upstream c682de9 with the four adaptations listed in its header —
+# see NOTICE.md.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/crt_adjust.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/badlands_analog_adjust.sv
 
 # ============================================================================

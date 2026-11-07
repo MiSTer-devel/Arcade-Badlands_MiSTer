@@ -2,7 +2,7 @@
 # Game RTL lives here and ONLY here — never add files from the Quartus GUI, and
 # never put game logic in sys/ (that directory is the untouched MiSTer framework).
 #
-# Quartus REWRITES Badlands.qsf on every compile (it appends the fitter's
+# Quartus REWRITES Arcade-Badlands.qsf on every compile (it appends the fitter's
 # set_location_assignment lines), so every hand-maintained assignment lives
 # here; files.qip is never rewritten by the tool and is edited by hand.
 #

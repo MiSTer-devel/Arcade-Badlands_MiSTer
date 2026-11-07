@@ -47,7 +47,7 @@ legacy 8 MB module will not work even though little of the module is used.
 
 ## Installation
 
-1. Copy `releases/Badlands_YYYYMMDD.rbf` to `_Arcade/cores/` on the SD card.
+1. Copy `releases/Arcade-Badlands_YYYYMMDD.rbf` to `_Arcade/cores/` on the SD card.
 2. Copy `releases/Badlands.mra` to `_Arcade/`.
 3. Place the matching MAME ROM archive (`badlands.zip`) in `games/mame/`.
 
@@ -287,13 +287,13 @@ the manual puts the speaker return. Neither reaches the digital core.
 ## Building
 
 Quartus Prime **17.0.2** (Lite or Standard) — the version MiSTer standardises
-on. Open `Badlands.qpf` and run a full compile, or from a shell:
+on. Open `Arcade-Badlands.qpf` and run a full compile, or from a shell:
 
 ```
-quartus_sh --flow compile Badlands
+quartus_sh --flow compile Arcade-Badlands
 ```
 
-The bitstream lands in `output_files/Badlands.rbf`. Source files are listed in
+The bitstream lands in `output_files/Arcade-Badlands.rbf`. Source files are listed in
 `files.qip`, which Quartus reads but cannot edit — add and remove entries by
 hand. `clean.bat` removes every build product.
 

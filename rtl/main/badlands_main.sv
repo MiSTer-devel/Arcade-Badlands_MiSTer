@@ -55,10 +55,10 @@ module badlands_main #(
 	parameter bit  UNDRIVEN_LAST_VALUE = 1'b0,
 	parameter int  POR_US              = 11000,
 	// LETA decode factor, steering sense and pedal rates
-	parameter bit  LETA_DECODE_X2      = 1'b0,
+	parameter bit  LETA_RESOL          = 1'b0,   // LETA pin 14 = GND -> 2x
 	parameter bit  QUAD_INVERT         = 1'b0,
-	parameter int  PEDAL_IDLE_HZ       = 283,
-	parameter int  PEDAL_PRESSED_HZ    = 7550,
+	parameter int  PEDAL_IDLE_HZ       = 271,
+	parameter int  PEDAL_PRESSED_HZ    = 4940,
 	parameter bit  PEDAL_IDLE_SILENT   = 1'b0,
 	// the 2816A's self-timed byte write
 	parameter int  EEPROM_WRITE_CYCLES = CLK_HZ / 100
@@ -336,7 +336,7 @@ module badlands_main #(
 	/* verilator lint_on UNUSEDSIGNAL */
 
 	badlands_inputs #(
-		.CLK_HZ(CLK_HZ), .LETA_DECODE_X2(LETA_DECODE_X2),
+		.CLK_HZ(CLK_HZ), .LETA_RESOL(LETA_RESOL),
 		.QUAD_INVERT(QUAD_INVERT), .PEDAL_IDLE_HZ(PEDAL_IDLE_HZ),
 		.PEDAL_PRESSED_HZ(PEDAL_PRESSED_HZ),
 		.PEDAL_IDLE_SILENT(PEDAL_IDLE_SILENT)

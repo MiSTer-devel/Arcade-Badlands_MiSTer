@@ -7,15 +7,15 @@
 //  see LICENSE, NOTICE.md.
 //
 //  Derivations, all GPL-compatible and listed in NOTICE.md:
-//   * `badlands_leta` follows
-//     `Arcade-Blasteroids_MiSTer/rtl/main/blstroid_leta.sv` (GPL-3.0,
-//     same author), which in turn follows the Atari System 2 core's
-//     `sys2_leta.sv` (GPL-2.0-or-later, RetroShrimp).  Bad Lands wires FOUR
-//     live channels, CK = /1H and RESOL = GND, so the rate, the channel count
-//     and the decode factor are all different.
-//   * `badlands_quad_gen` follows
-//     `Arcade-AtariSystem2_MiSTer/rtl/sound/sys2_quad_gen.sv`
-//     (GPL-2.0-or-later, RetroShrimp).
+//   * `badlands_leta` implements the behaviour of JROK's LETA_REP.vhd ("LETA
+//     on a CPLD", jrok.com/project/leta: a replacement built by bench-testing
+//     a real 137304-2002), as transcribed by the Atari System 2 MiSTer core's
+//     `rtl/sound/sys2_leta.sv` (GPL-2.0-or-later, RetroShrimp; MiSTer-devel
+//     Arcade-AtariSystem2_MiSTer commit f35c810b) and by our own Rampart
+//     core's `rampart_leta.sv` (GPL-3.0, same author).  No VHDL is copied.
+//     Bad Lands wires FOUR live channels, CK = /1H, RESOL = GND, TEST = GND.
+//   * `badlands_quad_gen` follows the same System 2 core's
+//     `rtl/sound/sys2_quad_gen.sv` (GPL-2.0-or-later, RetroShrimp).
 //   * `badlands_pedal_556` is Bad Lands' own: no other core in the tree has a
 //     555 astable on an encoder input.
 //
@@ -39,15 +39,23 @@
 //  positions off, which is what the manual requires for normal operation.
 //
 //  ============ LETA 20C ==================================================
-//    13 CK    = /1H (SOS-2 pin 15) = 3.579545 MHz -- the whole input filter.
-//               An encoder spun faster than this loses counts on real hardware
-//               rather than reading wrong, and this model does too.
-//    14 RESOL = GND -> 1x decoding
+//    13 CK    = /1H (SOS-2 pin 15) = 3.579545 MHz, the sample clock
+//    14 RESOL = GND -> 2x: DIR edges count, CLK edges do not
 //     9 TEST  = GND
 //    10 A1 / 11 A0 = 68000 A2 / A1  -> four live channels:
 //         0xFE6001 ch0 P1 (left) wheel   0xFE6003 ch1 P2 (right) wheel
 //         0xFE6005 ch2 pedal 1 (left)    0xFE6007 ch3 pedal 2 (right)
 //    15-22 D0-D7 = the 68000's D7:0 (the low byte, odd addresses)
+//
+//  Per channel, on every CK rising edge (JROK's bench-tested behaviour):
+//   * CLK and DIR are each shifted into a 3-sample history; a level is
+//     SETTLED only when three consecutive samples agree, so 1- and 2-sample
+//     glitches are ignored.  A state must last >= 3 CK periods (0.84 us).
+//   * the settled (CLK, DIR) is compared with the previous settled pair:
+//       DIR changed, CLK not: always counts; UP iff new DIR == CLK
+//       CLK changed, DIR not: counts only at RESOL = 1; UP iff new CLK != DIR
+//       both changed:         no count
+//   * RESOL = 0 is therefore 2x and RESOL = 1 is 4x.  There is NO 1x mode.
 //
 //  The counters are free-running 8-bit up/down counters: they wrap, a read
 //  does not clear them, and they never saturate.  The program differences two
@@ -59,8 +67,9 @@
 //  `badlands_quad_gen` parks at phase 0, both lines low, which is that state.
 //
 //  QUAD_INVERT = 0 is the shipped sense: turning right gives a positive delta,
-//  the LETA counts up, the game's heading index steps up and the car rotates
-//  clockwise on screen.  The wheel path has no complement, unlike the pedals.
+//  `badlands_quad_gen` makes CLK lead DIR, the LETA counts up, the game's
+//  heading index steps up and the car rotates clockwise on screen.  The wheel
+//  path has no complement, unlike the pedals.
 //
 //  ============ pedals ====================================================
 //  One LM556 at 26A, both halves used.  RESET is never gated, THRESHOLD is
@@ -69,18 +78,22 @@
 //  timer oscillates continuously and the pedal changes its frequency; it is
 //  not a one-pulse-per-press device.
 //
-//  One output is the raw square through 10 K, the other the same square
-//  through a 10 K / 1 nF low-pass, lagging by a fixed ~7 us -- a synthetic
-//  quadrature pair with permanently one-sided phase, so the counter always
-//  steps in one direction.  That direction is down: the raw output is the
-//  LETA's CLK and the lagged copy its DIR, so DIR is low at every CLK rising
-//  edge.
+//  The raw output goes through R43 10 K to the LETA's DIR; the same square
+//  through R41 10 K / C39 1 nF goes to its CLK, lagging by ~7 us -- a
+//  synthetic quadrature pair whose phase is permanently one-sided.  DIR
+//  leads, so at every DIR edge CLK still holds the OTHER level and both DIR
+//  edges count DOWN (two counts per cycle at RESOL = GND).
 //
-//    | pedal state | f            | LETA counts/frame at 1x |
-//    | open        | 278-289 Hz   | -4.6 .. -4.8            |
-//    | pressed     | 7.4-7.7 kHz  | -123 .. -128            |
-//  The program ones-complements the pedal delta, which turns those into a
-//  small throttle index at rest and a full one when the pedal is down.
+//  Rates, DERIVED by integrating the network with a bipolar output stage
+//  (V_OH ~ Vcc - 1.4 V, R42 pulling the node higher where the load allows;
+//  tests/pedal_556_rate.py):
+//    | pedal state | f (nominal, band)          | LETA counts/frame at 2x |
+//    | open        | 271 Hz   (229 .. 324 Hz)   |   -9.0  (-7.6 .. -10.8) |
+//    | pressed     | 4.94 kHz (4.13 .. 6.06 kHz)| -165    (-138 .. -202)  |
+//  Every corner stays below 256 counts a frame, so the 8-bit delta never
+//  wraps.  The program ones-complements the pedal delta, which turns those
+//  into a small throttle input at rest and a large one when the pedal is down;
+//  its quantiser auto-ranges, so the absolute rate does not matter.
 //
 //  PEDAL_IDLE_SILENT stops the idle oscillator so the LETA reads a flat 0x00,
 //  as MAME's does, for simulation only.  With the program's complement in the
@@ -93,25 +106,35 @@
 // optical encoder disc would produce on STEERING C / STEERING D.
 //
 // Why a generator and not "add the delta into the counter", which is what MAME
-// does: making real edges keeps the 3.58 MHz sample rate, the decode factor
-// and the direction logic in the path, so a player who spins faster than /1H
-// can sample loses counts exactly as on the board.
+// does: making real edges keeps the 3.58 MHz sample rate, the input filter,
+// the decode factor and the direction logic in the path, so a player who spins
+// faster than /1H can sample loses counts exactly as on the board.
 //
-// Phase arithmetic.  The Gray sequence is 00 -> 01 -> 11 -> 10 -> 00 written
-// (CLK, DIR), which is "forward" = the LETA counts up.  At 2x decoding one
-// count is two phase steps; at 1x (this board, RESOL = GND) one count is a
-// full cycle = four phase steps.  PHASE_PER_COUNT carries that, so a requested
-// delta of N always reads back as N counts whatever the decode factor -- the
-// MiSTer delta is a count request, not a disc position.
+// Phase arithmetic.  "Forward" (a positive request) is the Gray sequence
+// 00 -> 10 -> 11 -> 01 -> 00 written (CLK, DIR): CLK LEADS.  Each DIR edge
+// then lands with DIR == CLK, which the LETA counts UP; the CLK edges in
+// between are not counted at RESOL = GND.  So at 2x one count is two phase
+// steps (PHASE_PER_COUNT = 2; 1 at 4x), and a requested delta of N reads back
+// as N counts -- the MiSTer delta is a count request, not a disc position.
+//
+// Hold.  The LETA only accepts a level after three identical CK samples, so
+// each state is held for HOLD_TICKS ce_step ticks (ce_step is the same /1H
+// edge the LETA samples on).  At the default 4 that is 895 k phase steps a
+// second, ~447 k counts a second at 2x -- thousands of times what the pacer
+// in badlands_steer ever asks for.
+//
+// The sequence and the LETA's sign move TOGETHER: reverse one without the
+// other and the wheel steers backwards.
 //----------------------------------------------------------------------------
 /* verilator lint_off DECLFILENAME */
 module badlands_quad_gen #(
-	parameter int PHASE_PER_COUNT = 4,   // 4 at 1x decoding, 2 at 2x
+	parameter int PHASE_PER_COUNT = 2,   // 2 at 2x decoding (RESOL = 0), 1 at 4x
+	parameter int HOLD_TICKS      = 4,   // ce_step ticks per state, 3..8
 	parameter bit QUAD_INVERT     = 1'b0 // swap CLK and DIR
 )(
 	input  logic              clk,
 	input  logic              reset,
-	input  logic              ce_step,     // emit at most one phase step
+	input  logic              ce_step,     // one LETA sample (/1H rising)
 
 	input  logic signed [8:0] delta,       // signed count delta, + = clockwise
 	input  logic              delta_valid, // 1-clk pulse
@@ -139,9 +162,9 @@ module badlands_quad_gen #(
 	always_comb begin
 		case (ph)
 			2'd0:    begin p_clk = 1'b0; p_dir = 1'b0; end
-			2'd1:    begin p_clk = 1'b0; p_dir = 1'b1; end
+			2'd1:    begin p_clk = 1'b1; p_dir = 1'b0; end
 			2'd2:    begin p_clk = 1'b1; p_dir = 1'b1; end
-			default: begin p_clk = 1'b1; p_dir = 1'b0; end
+			default: begin p_clk = 1'b0; p_dir = 1'b1; end
 		endcase
 	end
 
@@ -150,15 +173,24 @@ module badlands_quad_gen #(
 	assign q_clk = QUAD_INVERT ? p_dir : p_clk;
 	assign q_dir = QUAD_INVERT ? p_clk : p_dir;
 
+	// Hold divider: a step is allowed on one ce_step in HOLD_TICKS.  A fixed
+	// 3-bit counter and a literal-width cast (Quartus 17.0 rejects casts it
+	// cannot size at parse time).
+	localparam logic [2:0] HOLD_LAST = 3'(HOLD_TICKS - 1);
+	logic [2:0] hold_cnt;
+	wire step_ok = ce_step && (hold_cnt == HOLD_LAST);
+
 	always_ff @(posedge clk) begin
 		if (reset) begin
 			// Park at phase 0 = both lines low: the pulled-down idle state
 			// (R15 installed, R36 not).
 			phase_target <= '0;
 			phase_now    <= '0;
+			hold_cnt     <= 3'd0;
 		end else begin
+			if (ce_step) hold_cnt <= (hold_cnt == HOLD_LAST) ? 3'd0 : hold_cnt + 3'd1;
 			phase_target <= phase_target + req_phase;
-			if (ce_step) begin
+			if (step_ok) begin
 				if      (remaining > 0) phase_now <= phase_now + 16'sd1;
 				else if (remaining < 0) phase_now <= phase_now - 16'sd1;
 			end
@@ -169,13 +201,14 @@ endmodule
 
 //----------------------------------------------------------------------------
 // badlands_pedal_556 -- one half of the LM556 at 26A plus its two RC networks.
-// A free-running 50 %-duty astable whose frequency the pedal changes; DIR is
-// the raw output and CLK is the same square lagging by LAG_US microseconds.
+// A free-running 50 %-duty astable whose frequency the pedal changes; q_dir is
+// the raw output (R43 -> LETA DIR) and q_clk the same square lagging by LAG_US
+// microseconds (R41 + C39 -> LETA CLK).  The rates are DERIVED, not measured.
 //----------------------------------------------------------------------------
 module badlands_pedal_556 #(
 	parameter int CLK_HZ      = 57272724,
-	parameter int IDLE_HZ     = 283,     // R_ext = R26 24 K -> 278-289 Hz
-	parameter int PRESSED_HZ  = 7550,    // R_ext = 0        -> 7.4-7.7 kHz
+	parameter int IDLE_HZ     = 271,     // R_ext = R26 24 K -> 229-324 Hz
+	parameter int PRESSED_HZ  = 4940,    // R_ext = 0        -> 4.13-6.06 kHz
 	parameter int LAG_US      = 7,       // the 10 K / 1 nF low-pass crossing
 	parameter bit IDLE_SILENT = 1'b0     // 1 = the idle oscillator is stopped
 )(
@@ -211,9 +244,12 @@ module badlands_pedal_556 #(
 		end
 	end
 
-	// The 10 K / 1 nF low-pass: tau = 10 us, crossing ~7 us after the edge.
-	// The half-period is 65 us (pressed) to 1.7 ms (idle), so the filtered copy
-	// is the same clean square wave, delayed.
+	// The 10 K / 1 nF low-pass: tau = 10 us, crossing ~4-12 us after the edge
+	// depending on the edge and the input threshold; 7 us is used.  The
+	// half-period is ~100 us (pressed) to ~1.8 ms (idle), so the filtered copy
+	// is the same clean square wave, delayed.  The exact lag cannot change a
+	// count: it only has to exceed the LETA's 3-sample filter (0.84 us) and
+	// stay well inside a half-period.
 	logic            lag_pending, lag_val;
 	logic [LAGW-1:0] lag_cnt;
 	logic            raw_d;
@@ -245,13 +281,13 @@ module badlands_pedal_556 #(
 endmodule
 
 //----------------------------------------------------------------------------
-// badlands_leta -- the LETA 20C's four free-running 8-bit counters.
+// badlands_leta -- the LETA 20C's four free-running 8-bit counters, with the
+// chip's 3-sample input filter and its edge rule (see the file header).
 //----------------------------------------------------------------------------
 module badlands_leta #(
-	// RESOL = GND -> 1x decoding: one count per full quadrature cycle, i.e.
-	// only the rising edge of CLK counts.  Set to 1 for the 2x decode the
-	// Blasteroids board straps.
-	parameter bit DECODE_X2 = 1'b0
+	// RESOL (pin 14).  0 = 2x: DIR edges only -- this board ties it to GND.
+	// 1 = 4x: DIR and CLK edges.  TEST (pin 9) is tied to GND and not modelled.
+	parameter bit RESOL = 1'b0
 )(
 	input  logic       clk,
 	input  logic       init_reset,   // FPGA init only -- the part has no reset pin
@@ -269,7 +305,9 @@ module badlands_leta #(
 );
 
 	logic [7:0] count [0:3];
-	logic [3:0] clk_d;
+	logic [2:0] hc [0:3];            // last three CLK samples, newest in bit 0
+	logic [2:0] hd [0:3];            // last three DIR samples
+	logic [3:0] lc, ld;              // last SETTLED CLK / DIR level
 	logic       h1_d;
 
 	assign dout   = count[a];
@@ -280,31 +318,42 @@ module badlands_leta #(
 
 	always_ff @(posedge clk) begin
 		if (init_reset) begin
-			count[0] <= 8'd0;
-			count[1] <= 8'd0;
-			count[2] <= 8'd0;
-			count[3] <= 8'd0;
-			// Prime the CLK history from the current inputs, not from zero: an
-			// idle channel would otherwise fabricate one count on the first
-			// sample.
-			clk_d    <= enc_clk;
-			h1_d     <= h1;
+			for (int i = 0; i < 4; i++) begin
+				count[i] <= 8'd0;
+				// Prime the filter and the settled levels from the CURRENT
+				// inputs, not from zero: an input sitting high would otherwise
+				// read as a fresh 0 -> 1 and fabricate a count.
+				hc[i]    <= {3{enc_clk[i]}};
+				hd[i]    <= {3{enc_dir[i]}};
+			end
+			lc   <= enc_clk;
+			ld   <= enc_dir;
+			h1_d <= h1;
 		end else begin
 			h1_d <= h1;
 			if (~h1 & h1_d) begin            // 1H falling = /1H rising = the CK pin
-				clk_d <= enc_clk;
 				for (int i = 0; i < 4; i++) begin
-					if (DECODE_X2) begin
-						// 2x: any transition of CLK counts
-						if (enc_clk[i] != clk_d[i])
-							count[i] <= (enc_clk[i] == enc_dir[i]) ? count[i] + 8'd1
-							                                       : count[i] - 8'd1;
-					end else begin
-						// 1x: only the rising edge of CLK -- one count per full
-						// quadrature cycle (RESOL = GND)
-						if (enc_clk[i] & ~clk_d[i])
-							count[i] <= (enc_dir[i]) ? count[i] + 8'd1
-							                         : count[i] - 8'd1;
+					hc[i] <= {hc[i][1:0], enc_clk[i]};
+					hd[i] <= {hd[i][1:0], enc_dir[i]};
+
+					// Everything below reads the history as it stood BEFORE
+					// this sample.
+					if (hc[i] == 3'b000) lc[i] <= 1'b0;
+					if (hc[i] == 3'b111) lc[i] <= 1'b1;
+					if (hd[i] == 3'b000) ld[i] <= 1'b0;
+					if (hd[i] == 3'b111) ld[i] <= 1'b1;
+
+					if ((hc[i] == 3'b000 || hc[i] == 3'b111) &&
+					    (hd[i] == 3'b000 || hd[i] == 3'b111)) begin
+						// DIR edge, CLK steady: counted at either resolution
+						if (hc[i][0] == lc[i] && hd[i][0] != ld[i])
+							count[i] <= (hd[i][0] == hc[i][0]) ? count[i] + 8'd1
+							                                   : count[i] - 8'd1;
+						// CLK edge, DIR steady: counted only at RESOL = 1
+						else if (RESOL && hc[i][0] != lc[i] && hd[i][0] == ld[i])
+							count[i] <= (hc[i][0] != hd[i][0]) ? count[i] + 8'd1
+							                                   : count[i] - 8'd1;
+						// both changed: no count
 					end
 				end
 			end
@@ -319,10 +368,10 @@ endmodule
 //----------------------------------------------------------------------------
 module badlands_inputs #(
 	parameter int  CLK_HZ            = 57272724,
-	parameter bit  LETA_DECODE_X2    = 1'b0,   // RESOL = GND -> 1x
+	parameter bit  LETA_RESOL        = 1'b0,   // RESOL = GND -> 2x
 	parameter bit  QUAD_INVERT       = 1'b0,   // the steering CLK/DIR sense
-	parameter int  PEDAL_IDLE_HZ     = 283,
-	parameter int  PEDAL_PRESSED_HZ  = 7550,
+	parameter int  PEDAL_IDLE_HZ     = 271,
+	parameter int  PEDAL_PRESSED_HZ  = 4940,
 	parameter int  PEDAL_LAG_US      = 7,
 	// Simulation only: 1 stops the idle oscillator so the LETA reads the flat
 	// 0x00 MAME's does.  It inverts the throttle, so it must be 0 in any build
@@ -372,14 +421,14 @@ module badlands_inputs #(
 	                         sw1_n[0] };    // D0  OLD STEERING WHEELS
 
 	// ---------------- the two steering quadrature generators -------------
-	// One phase step per /1H sample, so every emitted edge is guaranteed to be
-	// seen by the LETA; a faster request simply backs up and is delivered over
-	// the following samples (or is lost, exactly as a real disc would be).
+	// At most one phase step per HOLD_TICKS /1H samples, so every emitted state
+	// lasts long enough for the LETA's 3-sample filter; a faster request simply
+	// backs up and is delivered over the following samples.
 	logic h1_d;
 	always_ff @(posedge clk) h1_d <= h1;
 	wire ce_ck = ~h1 & h1_d;                     // /1H rising
 
-	localparam int PHASE_PER_COUNT = LETA_DECODE_X2 ? 2 : 4;
+	localparam int PHASE_PER_COUNT = LETA_RESOL ? 1 : 2;
 
 	logic [3:0] enc_clk, enc_dir;
 	/* verilator lint_off UNUSEDSIGNAL */
@@ -404,22 +453,21 @@ module badlands_inputs #(
 		.q_clk(enc_clk[1]), .q_dir(enc_dir[1]), .backlog(backlog1)
 	);
 
-	// The pedal channels count down, on purpose.  The 556's raw output drives
-	// the LETA's CLK pin and the low-passed copy drives DIR, so DIR is still
-	// low at every CLK rising edge and `badlands_leta` steps down.  The program
+	// The pedal channels count down, on purpose.  Schematic sheet 1: the 556's
+	// raw output reaches the LETA's DIR (R43) and the low-passed copy its CLK
+	// (R41 + C39), so DIR leads and both DIR edges count DOWN.  The program
 	// needs that: its pedal blocks at 0x008472 / 0x0084A2 ones-complement the
 	// 8-bit delta (`eori.w #$FF,D1`) before storing it, which the wheel blocks
 	// do not, so an up-counting pedal would read as full throttle at rest and
-	// none when pressed.  The steering pins are untouched -- `badlands_quad_gen`
-	// still counts up.
+	// none when pressed.
 	//
-	// `pedal_invert` selects the up-counting pairing instead (OSD "Gas pedal
-	// sense -> Inverted").
+	// `pedal_invert` selects the other pairing (raw -> CLK, lagged -> DIR),
+	// which counts UP (OSD "Gas pedal sense -> Inverted").
 	logic ped2_clk, ped2_dir, ped3_clk, ped3_dir;
-	assign enc_clk[2] = pedal_invert ? ped2_clk : ped2_dir;
-	assign enc_dir[2] = pedal_invert ? ped2_dir : ped2_clk;
-	assign enc_clk[3] = pedal_invert ? ped3_clk : ped3_dir;
-	assign enc_dir[3] = pedal_invert ? ped3_dir : ped3_clk;
+	assign enc_clk[2] = pedal_invert ? ped2_dir : ped2_clk;
+	assign enc_dir[2] = pedal_invert ? ped2_clk : ped2_dir;
+	assign enc_clk[3] = pedal_invert ? ped3_dir : ped3_clk;
+	assign enc_dir[3] = pedal_invert ? ped3_clk : ped3_dir;
 
 	// ---------------- the two LM556 halves -------------------------------
 	// 1026A (pins 8-13) is pedal 1 (left)  -> LETA channel 2
@@ -441,7 +489,7 @@ module badlands_inputs #(
 	);
 
 	// ---------------- the LETA itself ------------------------------------
-	badlands_leta #(.DECODE_X2(LETA_DECODE_X2)) u_leta (
+	badlands_leta #(.RESOL(LETA_RESOL)) u_leta (
 		.clk(clk), .init_reset(reset),
 		.h1(h1), .enc_clk(enc_clk), .enc_dir(enc_dir),
 		.a(leta_a), .dout(leta_dout),

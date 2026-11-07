@@ -38,7 +38,7 @@ GPL-2.0-or-later — compatible with this project's GPL-3.0.
 | `rtl/video/badlands_sos2_sync.sv`, `badlands_testpat.sv` | Blasteroids / Xybots / Vindicators MiSTer cores |
 | `rtl/video/badlands_analog_adjust.sv` | Blasteroids MiSTer core, `blstroid_analog_adjust.sv` (the crt_adjust glue), written from MiSTer-CRT-Adjust's `examples/core_side_snippet.v` (Umberto Parisi) |
 | `rtl/main/badlands_main.sv`, `badlands_cpu.sv`, `badlands_addr_decode.sv`, `badlands_dtack.sv`, `badlands_irq.sv`, `badlands_watchdog.sv`, `badlands_eeprom_2816.sv`, `badlands_nvram_io.sv` | Blasteroids `blstroid_main.sv` and the Xybots fx68k CPU wrapper |
-| `rtl/main/badlands_inputs.sv` — the `badlands_leta` model | Blasteroids `blstroid_leta.sv`, which itself follows the Atari System 2 core's `sys2_leta.sv` |
+| `rtl/main/badlands_inputs.sv` — the `badlands_leta` model | Atari System 2 MiSTer core, `sys2_leta.sv` (GPL-2.0-or-later), and the Rampart MiSTer core's `rampart_leta.sv`, both implementing the behaviour of JROK's `LETA_REP.vhd` ("LETA on a CPLD", jrok.com/project/leta); structure from Blasteroids `blstroid_leta.sv` |
 | `rtl/main/badlands_inputs.sv` — the `badlands_quad_gen` model | Atari System 2 MiSTer core, `sys2_quad_gen.sv` (GPL-2.0-or-later) |
 | `rtl/badlands_steer.sv` | Atari System 2 MiSTer core, `sys2_analog_spin.sv` and `sys2_analog_axis.sv` (GPL-2.0-or-later); spinner sensitivity table from the Blasteroids core |
 | `rtl/mem/badlands_sdram.sv`, `badlands_sdram_loader.sv`, `badlands_rom_loader.sv`, `badlands_prog_rom.sv`, `badlands_gfx_mem.sv`, `badlands_vram.sv` | Blasteroids / Xybots memory path |

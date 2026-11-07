@@ -162,9 +162,9 @@ The whole core runs in a single **57.272724 MHz** `clk_sys` domain (4 × the
 every clock on the board is an exact subdivision and there is no clock-domain
 crossing anywhere inside the game logic.
 
-Resource use on the DE10-Nano's Cyclone V (`5CSEBA6U23I7`): 13,580 / 41,910 ALMs
-(32 %), 433 / 553 RAM blocks (78 %), 45 / 112 DSP blocks (40 %). Timing closes
-on all four corners with +3.596 ns worst-case setup slack on `clk_sys`.
+Resource use on the DE10-Nano's Cyclone V (`5CSEBA6U23I7`): 13,645 / 41,910 ALMs
+(33 %), 433 / 553 RAM blocks (78 %), 45 / 112 DSP blocks (40 %). Timing closes
+on all four corners with +2.728 ns worst-case setup slack on `clk_sys`.
 
 ## Accuracy and verification
 
@@ -173,7 +173,7 @@ about whether the result was actually checked, here is the verification record.
 The test suite lives in the development repository and is not shipped here;
 these are its results for the released build.
 
-**Simulation suite** — 41 gated testbenches (Icarus Verilog, plus Verilator
+**Simulation suite** — 45 gated testbenches (Icarus Verilog, plus Verilator
 co-simulations that link the vendored VHDL CPU), covering the address decode,
 bus timing, interrupts and watchdog, EEPROM, inputs and steering, the SDRAM
 path, every video stage and the full sound section, each paired with a
@@ -234,7 +234,7 @@ changes how the game plays.
 | **Colour-RAM writes repeat pixels** | No equivalent | The pixel clock is held while the CPU accesses colour RAM, so **3 consecutive pixels hold the previous colour** when that happens during active display |
 | **Video / work RAM wait states** | None | The board's: the 68000 waits up to 8 pixel-clock periods (1.1 µs) per access for its time slot |
 | **Sound self-test bit polarity** | D7 = 1 when self-test is *off* | The inverting LS240 and the game ROM both give D7 = 1 when the switch is *on*. MAME's polarity makes the sound CPU run its self-test during normal play and skip it in self-test |
-| **Gas pedals** | A per-frame ±1 counter | The actual circuit: an LM556 oscillator whose frequency the pedal changes (≈ 280 Hz idle to ≈ 7.5 kHz pressed), clocking the LETA's pedal channel downward |
+| **Gas pedals** | A per-frame ±1 counter | The actual circuit: an LM556 oscillator whose frequency the pedal changes (≈ 270 Hz idle to ≈ 4.9 kHz pressed, derived), clocking the LETA's pedal channel downward |
 | **Sound IRQ phase** | Scanlines 0, 64, 128, 192 | The schematic's rising edges of `VBLANK OR 32V`: scanlines 32, 96, 160, 224 — the same four per frame, 32 lines later |
 | **Watchdog period** | A library-default timer, about 20× too long | 8 VBLANK periods (≈ 134 ms), then reset held for 8 more frames |
 | **MO stamp-row carry** | The whole 12-bit code is incremented | The carry stops at bit 9; the top two bits go to the ROM chip select untouched. They differ only if `code[9:0] + row` crosses 1024 |
